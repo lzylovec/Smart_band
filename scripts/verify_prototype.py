@@ -1,6 +1,6 @@
 """Headless verification for prototype/index.html (acceptance of T2).
 
-Run: $MIMO_PYTHON scripts/verify_prototype.py
+Run: python3 scripts/verify_prototype.py
 """
 import json
 import sys
@@ -103,6 +103,18 @@ def main():
         assert s3["dir"] == {"x": 0, "y": 1}, f"reversal not ignored: {s3['dir']}"
         assert s3["snake"][0]["y"] == prev["y"] + 1, "head should still move down"
         print("PASS turn + 180-degree reversal guard")
+
+        # same-tick double press must not bypass the reversal guard:
+        # while moving down: press Left (perpendicular, queued) then Up
+        # (opposite of current dir -> must be ignored even with a queued turn)
+        prev = s3["snake"][0]
+        page.keyboard.press("ArrowLeft")
+        page.keyboard.press("ArrowUp")
+        s4 = wait_head_move(page, prev)
+        assert s4["state"] == "play", f"double-press reversal killed the snake: {s4}"
+        assert s4["dir"] == {"x": -1, "y": 0}, f"Up must be ignored while moving down: {s4['dir']}"
+        assert s4["snake"][0] == {"x": prev["x"] - 1, "y": prev["y"]}, s4["snake"][0]
+        print("PASS same-tick double press cannot bypass reversal guard")
 
         steer_to_food(page)
         s = snap(page)

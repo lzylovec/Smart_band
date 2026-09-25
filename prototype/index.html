@@ -51,7 +51,11 @@
 
   var state, snake, dir, queued, food, score, foods, tickMs, timer, best;
 
-  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  try {
+    best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  } catch (e) {
+    best = 0;
+  }
 
   function randInt(n) { return Math.floor(Math.random() * n); }
 
@@ -135,9 +139,9 @@
       return;
     }
     if (state !== "play") return;
-    var base = queued || dir;
-    if (base.x === -nx && base.y === -ny) return; // 禁止 180° 掉头
-    if (base.x === nx && base.y === ny) return;
+    // 只与当前前进方向比对：若比对 queued，同一 tick 内的二次按键
+    // （如向右移动时按 ↑ 再按 ←）会绕过掉头保护，导致撞颈即死
+    if (dir.x === -nx && dir.y === -ny) return;
     queued = { x: nx, y: ny };
   }
 

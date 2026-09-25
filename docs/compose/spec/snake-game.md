@@ -1,9 +1,9 @@
 ---
 feature: snake-game
-status: in-progress
+status: delivered
 updated: 2026-09-25
 branch: feat/band11-snake-quickapp
-commits: 496b84c..5b9f8de # 第一轮交付；第二轮（rpk 打包）进行中
+commits: 496b84c..5b9f8de（第一轮）；67e729e..2bd8f6b（第二轮）
 ---
 
 # 小米手环 11 贪吃蛇（快应用）
@@ -14,10 +14,16 @@ commits: 496b84c..5b9f8de # 第一轮交付；第二轮（rpk 打包）进行中
 
 **Verification** — `python3 scripts/verify_prototype.py`（headless Chromium）：9 项 PASS，含无 JS/console 错误、节拍推进、转向与掉头保护、同 tick 双键无法绕过掉头保护、进食计分与加速、撞墙死亡+最高分持久化、重开/暂停恢复、刷新后最高分存活；`ALL CHECKS PASSED`。回归有效性：对修复前代码（stash 后）运行同脚本，在双键断言处 AssertionError、EXIT=1。独立评审子代理对 critical 修复 diff（496b84c..5b9f8de）复审：三项结论均无 critical。
 
+**What was built（第二轮）** — `quickapp/` Vela 快应用项目：贪吃蛇完整移植（div 绝对定位渲染，Vela 无 canvas；触屏滑动转向/轻点暂停重开；`@system.storage` 最高分，回调只允许抬高以封死竞态回退；`onHide` 暂停并清定时器、`onDestroy` 清定时器；manifest `designWidth: 212`）。macOS 纯 CLI 打包链路落地：`aiot build` 产出 debug rpk、自签 `aiot release` 产出签名 release rpk，双包入库存于 `quickapp/dist/`，`sign/` 私钥不入库。产物级核验确认 zip 结构（manifest/app/pages/CERT）、`designWidth=212`、编译产物含修复后的掉头保护与存储守卫、`RPK Sig Block` 签名块存在。
+
+**Verification（第二轮）** — `aiot build` 与 `aiot release` 构建成功，且按产物结构核验（工具链吞异常，EXIT=0 不单独作为证据）：两 rpk 各 11 个文件、release 内 manifest 逐字段核对、debug 包含 `v > self.best`、release 包含 `!isNaN(s)&&s>t.best`、签名块 `RPK Sig Block 42` 存在。独立评审：规格符合性与一致性无 critical，正确性发现 1 个 critical（storage.get 延迟回调回退最高分），修复后复审确认封死且无同类残留，可 Finalize。原型回归：`python3 scripts/verify_prototype.py` 9 项 PASS。
+
 **Journey log** —
 1. 首版掉头保护比对 `queued||dir`，同 tick 先↑后← 可绕过导致单步掉头撞颈即死；评审发现后改为仅对照 `dir`，不变式"dir 仅在 step 中变更"保证任意按键序列无法产生单步 180°。
 2. 验证脚本最初只测单次反向，漏报上述漏洞；补充同 tick 双键断言后旧代码 FAIL、新代码 PASS，测试有效性经反向验证。
 3. 手环 11 无官方三方 SDK，调研确立 AstroBox/aiot-toolkit 侧载链路；plugin-dev（WASM 宿主插件）与本特性无关，早期方向为死胡同。
+4. aiot-toolkit 2.0.5 的 `bin.js` 捕获异常但不设非零退出码，"EXIT=0"不可单独作证据；必须核验 rpk 结构、编译产物内容与签名块。
+5. Vela 快应用组件表无 canvas，改用 div 绝对定位 + index 对齐渲染（div `for` 的动态 `tid` 编译报错，仅接受静态字符串）；storage.get 延迟回调必须只允许抬高最高分，否则竞态回退可永久丢分。
 
 ## [S1] Problem
 
@@ -177,5 +183,5 @@ curl -fsSL https://abox.run/install.sh | bash
 - [x] T2: 实现 Web 可玩原型 `prototype/index.html` — acceptance: headless 浏览器验证通过：无 JS 错误、蛇随节拍移动、转向有效、撞墙进入游戏结束且最高分持久化（covers: S2; depends: T1）
 - [x] T3: 调研 macOS 打包链路并回填文档 — acceptance: S2「真机打包链路」小节包含可复现结论或明确阻塞点+替代方案，并记录手环 11 适配依据（covers: S2; depends: T1）
 - [x] T4: 验证、独立评审并 Finalize — acceptance: 验证命令与结果记录于 Report，评审子代理三结论（规格符合性/正确性/一致性）均无 critical，文档 status: delivered 并提交（covers: 全部; depends: T2, T3）
-- [ ] T5: 移植原型到 `quickapp/` 并打出签名 rpk — acceptance: `aiot release` 无错误退出产出 rpk，zip 结构检查含应用元数据与页面文件；`sign/` 私钥不入库（covers: 快应用交付契约; depends: T4）
-- [ ] T6: 第二轮验证、评审并 Finalize — acceptance: 构建验证命令与结果记入 Report，评审子代理三结论均无 critical，status: delivered 并提交（covers: 快应用交付契约; depends: T5）
+- [x] T5: 移植原型到 `quickapp/` 并打出签名 rpk — acceptance: `aiot release` 无错误退出产出 rpk，zip 结构检查含应用元数据与页面文件；`sign/` 私钥不入库（covers: 快应用交付契约; depends: T4）
+- [x] T6: 第二轮验证、评审并 Finalize — acceptance: 构建验证命令与结果记入 Report，评审子代理三结论均无 critical，status: delivered 并提交（covers: 快应用交付契约; depends: T5）

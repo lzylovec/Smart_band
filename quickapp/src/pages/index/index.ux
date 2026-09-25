@@ -1,0 +1,396 @@
+<template>
+  <div class="page" ontouchstart="onTouchStart" ontouchend="onTouchEnd">
+    <div class="hud">
+      <text class="score">得分 {{score}}</text>
+      <text class="best">最高 {{best}}</text>
+    </div>
+    <div class="hud-line"></div>
+
+    <div class="board">
+      <div class="vline" for="{{vlines}}" style="left: {{$item}}px"></div>
+      <div class="hline" for="{{hlines}}" style="top: {{$item}}px"></div>
+
+      <div class="food" if="{{foodOn}}" style="left: {{foodL}}px; top: {{foodT}}px"></div>
+
+      <div
+        class="seg"
+        for="{{segments}}"
+        style="left: {{$item.l}}px; top: {{$item.t}}px; width: {{$item.sz}}px; height: {{$item.sz}}px; border-radius: {{$item.r}}px; background-color: {{$item.c}};"
+      ></div>
+    </div>
+
+    <div class="overlay" if="{{overlayOn}}">
+      <text
+        class="ov"
+        for="{{overlay}}"
+        style="font-size: {{$item.s}}px; color: {{$item.c}}; font-weight: {{$item.w}}; margin-top: {{$item.m}}px"
+        >{{$item.t}}</text
+      >
+    </div>
+  </div>
+</template>
+
+<script>
+import storage from '@system.storage'
+
+const CELL = 16
+const COLS = 13
+const ROWS = 30
+const BASE_TICK = 200
+const MIN_TICK = 80
+const TICK_STEP = 4
+const BEST_KEY = 'snake-best'
+const C_SNAKE = '#4ADE80'
+const C_HEAD = '#86EFAC'
+const SWIPE_MIN = 12
+
+function buildVlines() {
+  const a = []
+  for (let k = 1; k < COLS; k++) a.push(k * CELL)
+  return a
+}
+
+function buildHlines() {
+  const a = []
+  for (let k = 1; k < ROWS; k++) a.push(k * CELL)
+  return a
+}
+
+export default {
+  private: {
+    state: 'start',
+    score: 0,
+    best: 0,
+    tickMs: BASE_TICK,
+    segments: [],
+    foodOn: false,
+    foodL: 0,
+    foodT: 0,
+    overlayOn: true,
+    overlay: [],
+    vlines: buildVlines(),
+    hlines: buildHlines()
+  },
+
+  protected: {
+    timer: null
+  },
+
+  onInit() {
+    this._snake = []
+    this._dir = { x: 1, y: 0 }
+    this._queued = null
+    this._food = null
+    this._foods = 0
+    this._nextId = 1
+    this._t0 = null
+
+    this._reset()
+    this.state = 'start'
+    this._draw()
+
+    const self = this
+    storage.get({
+      key: BEST_KEY,
+      success(data) {
+        const v = parseInt(data, 10)
+        if (!isNaN(v)) self.best = v
+      },
+      fail() {}
+    })
+  },
+
+  onHide() {
+    clearTimeout(this.timer)
+    if (this.state === 'play') {
+      this.state = 'pause'
+      this._draw()
+    }
+  },
+
+  onDestroy() {
+    clearTimeout(this.timer)
+  },
+
+  // ---------- 游戏逻辑（移植自 prototype/index.html） ----------
+
+  _reset() {
+    const cy = Math.floor(ROWS / 2)
+    const cx = Math.floor(COLS / 2)
+    this._snake = [
+      { x: cx, y: cy, id: this._nextId++ },
+      { x: cx - 1, y: cy, id: this._nextId++ },
+      { x: cx - 2, y: cy, id: this._nextId++ }
+    ]
+    this._dir = { x: 1, y: 0 }
+    this._queued = null
+    this.score = 0
+    this._foods = 0
+    this.tickMs = BASE_TICK
+    this._placeFood()
+  },
+
+  _placeFood() {
+    const open = []
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        let on = false
+        for (let i = 0; i < this._snake.length; i++) {
+          if (this._snake[i].x === x && this._snake[i].y === y) {
+            on = true
+            break
+          }
+        }
+        if (!on) open.push({ x, y })
+      }
+    }
+    this._food = open.length ? open[Math.floor(Math.random() * open.length)] : null
+  },
+
+  _start() {
+    this._reset()
+    this.state = 'play'
+    this._draw()
+    this._schedule()
+  },
+
+  _schedule() {
+    clearTimeout(this.timer)
+    if (this.state !== 'play') return
+    this.timer = setTimeout(() => {
+      this._step()
+    }, this.tickMs)
+  },
+
+  _step() {
+    if (this.state !== 'play') return
+    if (this._queued) {
+      this._dir = this._queued
+      this._queued = null
+    }
+    const head = { x: this._snake[0].x + this._dir.x, y: this._snake[0].y + this._dir.y, id: this._nextId++ }
+
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      this._die()
+      return
+    }
+    for (let i = 0; i < this._snake.length; i++) {
+      if (this._snake[i].x === head.x && this._snake[i].y === head.y) {
+        this._die()
+        return
+      }
+    }
+
+    this._snake.unshift(head)
+    if (this._food && head.x === this._food.x && head.y === this._food.y) {
+      this.score += 10
+      this._foods++
+      this.tickMs = Math.max(MIN_TICK, BASE_TICK - this._foods * TICK_STEP)
+      this._placeFood()
+    } else {
+      this._snake.pop()
+    }
+    this._draw()
+    this._schedule()
+  },
+
+  _die() {
+    this.state = 'over'
+    if (this.score > this.best) {
+      this.best = this.score
+      storage.set({
+        key: BEST_KEY,
+        value: String(this.best),
+        success() {},
+        fail() {}
+      })
+    }
+    clearTimeout(this.timer)
+    this._draw()
+  },
+
+  _turn(nx, ny) {
+    if (this.state === 'start' || this.state === 'over') {
+      this._start()
+      return
+    }
+    if (this.state !== 'play') return
+    // 掉头保护：仅对照当前前进方向（与原型一致，单步内不可能 180°）
+    if (this._dir.x === -nx && this._dir.y === -ny) return
+    this._queued = { x: nx, y: ny }
+  },
+
+  _togglePause() {
+    if (this.state === 'play') {
+      this.state = 'pause'
+      clearTimeout(this.timer)
+      this._draw()
+    } else if (this.state === 'pause') {
+      this.state = 'play'
+      this._draw()
+      this._schedule()
+    }
+  },
+
+  // ---------- 视图同步 ----------
+
+  _sync() {
+    const list = []
+    for (let i = 0; i < this._snake.length; i++) {
+      const s = this._snake[i]
+      const pad = i === 0 ? 1 : 2
+      list.push({
+        id: s.id,
+        l: s.x * CELL + pad,
+        t: s.y * CELL + pad,
+        sz: CELL - pad * 2,
+        r: i === 0 ? 5 : 4,
+        c: i === 0 ? C_HEAD : C_SNAKE
+      })
+    }
+    this.segments = list
+    if (this._food) {
+      this.foodOn = true
+      this.foodL = this._food.x * CELL + 2.5
+      this.foodT = this._food.y * CELL + 2.5
+    } else {
+      this.foodOn = false
+    }
+  },
+
+  _draw() {
+    if (this.state === 'start') {
+      this.overlay = [
+        { t: '贪吃蛇', s: 26, c: '#FFFFFF', w: 700, m: 0 },
+        { t: '滑动转向 · 轻点暂停', s: 13, c: '#9CA3AF', w: 400, m: 16 },
+        { t: '轻点或滑动开始', s: 13, c: '#4ADE80', w: 500, m: 16 }
+      ]
+      this.overlayOn = true
+    } else if (this.state === 'pause') {
+      this.overlay = [
+        { t: '已暂停', s: 24, c: '#FFFFFF', w: 700, m: 0 },
+        { t: '轻点继续', s: 13, c: '#9CA3AF', w: 400, m: 16 }
+      ]
+      this.overlayOn = true
+    } else if (this.state === 'over') {
+      this.overlay = [
+        { t: '游戏结束', s: 24, c: '#F87171', w: 700, m: 0 },
+        { t: '得分 ' + this.score + ' · 最高 ' + this.best, s: 16, c: '#FFFFFF', w: 600, m: 16 },
+        { t: '再滑一次或轻点重开', s: 13, c: '#9CA3AF', w: 400, m: 16 }
+      ]
+      this.overlayOn = true
+    } else {
+      this.overlayOn = false
+    }
+    this._sync()
+  },
+
+  // ---------- 触屏输入 ----------
+
+  onTouchStart(e) {
+    if (e.touches && e.touches.length === 1) {
+      this._t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+  },
+
+  onTouchEnd(e) {
+    if (!this._t0 || !e.changedTouches || !e.changedTouches.length) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - this._t0.x
+    const dy = t.clientY - this._t0.y
+    this._t0 = null
+    if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) {
+      // 轻点：开始/重开，否则暂停/继续
+      if (this.state === 'start' || this.state === 'over') this._start()
+      else this._togglePause()
+      return
+    }
+    if (Math.abs(dx) > Math.abs(dy)) this._turn(dx > 0 ? 1 : -1, 0)
+    else this._turn(0, dy > 0 ? 1 : -1)
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+}
+.hud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 212px;
+  height: 40px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.score {
+  font-size: 16px;
+  color: #ffffff;
+  font-weight: 600;
+}
+.best {
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+.hud-line {
+  position: absolute;
+  left: 0;
+  top: 38px;
+  width: 212px;
+  height: 1px;
+  background-color: #1f2937;
+}
+.board {
+  position: absolute;
+  left: 2px;
+  top: 40px;
+  width: 208px;
+  height: 480px;
+  background-color: #0a0a0a;
+}
+.vline {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 480px;
+  background-color: #141414;
+}
+.hline {
+  position: absolute;
+  left: 0;
+  width: 208px;
+  height: 1px;
+  background-color: #141414;
+}
+.food {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background-color: #f87171;
+}
+.seg {
+  position: absolute;
+}
+.overlay {
+  position: absolute;
+  left: 0;
+  top: 40px;
+  width: 212px;
+  height: 480px;
+  background-color: rgba(0, 0, 0, 0.78);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.ov {
+  text-align: center;
+}
+</style>

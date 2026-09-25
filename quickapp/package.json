@@ -1,0 +1,17 @@
+{
+  "name": "snake-band11",
+  "version": "1.0.0",
+  "description": "贪吃蛇 for 小米手环 11 (Vela quickapp)",
+  "engines": {
+    "node": ">=8.10"
+  },
+  "scripts": {
+    "start": "aiot start --watch",
+    "build": "aiot build",
+    "release": "aiot release"
+  },
+  "devDependencies": {
+    "@aiot-toolkit/jsc": "^1.0.3",
+    "aiot-toolkit": "^2.0.5"
+  }
+}

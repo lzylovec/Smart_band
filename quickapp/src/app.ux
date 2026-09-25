@@ -1,0 +1,10 @@
+<script>
+export default {
+  onCreate() {
+    console.log('snake app created')
+  },
+  onDestroy() {
+    console.log('snake app destroyed')
+  }
+}
+</script>

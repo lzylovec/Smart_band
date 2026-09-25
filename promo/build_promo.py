@@ -56,6 +56,14 @@ def sp_text(d, xy, text, font, fill, spacing=0, anchor_left=True):
     return x
 
 
+def sp_text_r(d, xy, text, font, fill, spacing=0):
+    """Right-aligned spaced text; xy = (right_x, center_y)."""
+    x_r, y = xy
+    w = sum(d.textlength(c, font=font) for c in text) + spacing * (len(text) - 1)
+    sp_text(d, (x_r - w, y), text, font, fill, spacing)
+    return x_r - w
+
+
 def draw_grid(d, w, h, step=52, color=GRID):
     for x in range(step, w, step):
         d.line([(x, 0), (x, h)], fill=color, width=1)
@@ -138,6 +146,8 @@ def banner():
 
     x0 = 620
     sp_text(d, (x0, 150), "SMART BAND 11 · VELA QUICKAPP", f_lbl, GRAY, spacing=5)
+    f_cred, _ = cjk_font(24, ("Medium",))
+    sp_text_r(d, (W - 120, 150), "作者 · 刘镇瑜", f_cred, GRAY, spacing=4)
 
     d.text((x0, 320), "贪吃蛇", font=f_title, fill=GREEN, anchor="lm")
 
@@ -170,6 +180,8 @@ def poster():
     f_mono = latin_font(20)
 
     sp_text(d, (72, 96), "OPEN SOURCE", f_lbl, GRAY, spacing=5)
+    f_cred, _ = cjk_font(24, ("Medium",))
+    sp_text_r(d, (W - 112, 96), "作者 · 刘镇瑜", f_cred, GRAY, spacing=4)
     d.ellipse([W - 84, 86, W - 66, 104], fill=RED)
 
     d.text((72, 210), "贪吃蛇", font=f_title, fill=GREEN, anchor="lm")
@@ -222,6 +234,8 @@ def plate():
 
     d.text((80, 78), "贪吃蛇 · 小米手环 11", font=f_head, fill=WHITE, anchor="lm")
     sp_text(d, (80, 130), "FIG. 02 — GAME STATES / 212 × 520 TRACK SCREEN", f_mono, GRAY, spacing=3)
+    f_cred, _ = cjk_font(24, ("Medium",))
+    sp_text_r(d, (W - 80, 90), "作者 · 刘镇瑜", f_cred, GRAY, spacing=4)
 
     shot_h = 620
     a = scale_shot(rounded_shot(ROOT / "shot-start.png"), shot_h)

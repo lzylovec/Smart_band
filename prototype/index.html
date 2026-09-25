@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>手环贪吃蛇 · 小米手环11 原型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  #stage {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #c {
+    display: block;
+    height: min(92vh, 780px);
+    width: auto;
+    border-radius: 24px;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" width="212" height="520"></canvas></div>
+<script>
+(function () {
+  "use strict";
+
+  var W = 212, H = 520;
+  var HUD = 40, CELL = 16, COLS = 13, ROWS = 30;
+  var FX = Math.floor((W - COLS * CELL) / 2); // 2
+  var FY = HUD;
+  var BASE_TICK = 200, MIN_TICK = 80, TICK_STEP = 4;
+
+  var C_BG = "#000000", C_SNAKE = "#4ADE80", C_HEAD = "#86EFAC",
+      C_FOOD = "#F87171", C_TEXT = "#FFFFFF", C_DIM = "#9CA3AF";
+
+  var BEST_KEY = "snake-best";
+
+  var cv = document.getElementById("c");
+  var ctx = cv.getContext("2d");
+
+  var state, snake, dir, queued, food, score, foods, tickMs, timer, best;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function randInt(n) { return Math.floor(Math.random() * n); }
+
+  function placeFood() {
+    var open = [];
+    for (var y = 0; y < ROWS; y++) {
+      for (var x = 0; x < COLS; x++) {
+        var on = false;
+        for (var i = 0; i < snake.length; i++) {
+          if (snake[i].x === x && snake[i].y === y) { on = true; break; }
+        }
+        if (!on) open.push({ x: x, y: y });
+      }
+    }
+    food = open.length ? open[randInt(open.length)] : null;
+  }
+
+  function reset() {
+    var cy = Math.floor(ROWS / 2), cx = Math.floor(COLS / 2);
+    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
+    dir = { x: 1, y: 0 };
+    queued = null;
+    score = 0;
+    foods = 0;
+    tickMs = BASE_TICK;
+    placeFood();
+  }
+
+  function setBest() {
+    if (score > best) {
+      best = score;
+      try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+    }
+  }
+
+  function start() {
+    reset();
+    state = "play";
+    schedule();
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (state !== "play") return;
+    timer = setTimeout(step, tickMs);
+  }
+
+  function step() {
+    if (state !== "play") return;
+    if (queued) { dir = queued; queued = null; }
+    var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { die(); return; }
+    for (var i = 0; i < snake.length; i++) {
+      if (snake[i].x === head.x && snake[i].y === head.y) { die(); return; }
+    }
+
+    snake.unshift(head);
+    if (food && head.x === food.x && head.y === food.y) {
+      score += 10;
+      foods++;
+      tickMs = Math.max(MIN_TICK, BASE_TICK - foods * TICK_STEP);
+      placeFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+    schedule();
+  }
+
+  function die() {
+    state = "over";
+    setBest();
+    draw();
+  }
+
+  function turn(nx, ny) {
+    if (state === "start" || state === "over") {
+      if (state === "over") start(); // 再滑一次/按键重开
+      else start();
+      return;
+    }
+    if (state !== "play") return;
+    var base = queued || dir;
+    if (base.x === -nx && base.y === -ny) return; // 禁止 180° 掉头
+    if (base.x === nx && base.y === ny) return;
+    queued = { x: nx, y: ny };
+  }
+
+  function togglePause() {
+    if (state === "play") {
+      state = "pause";
+      clearTimeout(timer);
+      draw();
+    } else if (state === "pause") {
+      state = "play";
+      schedule();
+      draw();
+    }
+  }
+
+  // ---------- 绘制 ----------
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function text(str, x, y, size, color, align, weight) {
+    ctx.fillStyle = color;
+    ctx.font = (weight || "400") + " " + size + "px -apple-system, 'PingFang SC', sans-serif";
+    ctx.textAlign = align || "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(str, x, y);
+  }
+
+  function drawHud() {
+    text("得分 " + score, 12, 20, 16, C_TEXT, "left", "600");
+    text("最高 " + best, W - 12, 20, 13, C_DIM, "right", "400");
+    ctx.fillStyle = "#1F2937";
+    ctx.fillRect(0, HUD - 2, W, 1);
+  }
+
+  function drawBoard() {
+    ctx.fillStyle = "#0A0A0A";
+    ctx.fillRect(FX, FY, COLS * CELL, ROWS * CELL);
+    ctx.strokeStyle = "#141414";
+    ctx.lineWidth = 1;
+    for (var x = 1; x < COLS; x++) {
+      ctx.beginPath();
+      ctx.moveTo(FX + x * CELL + 0.5, FY);
+      ctx.lineTo(FX + x * CELL + 0.5, FY + ROWS * CELL);
+      ctx.stroke();
+    }
+    for (var y = 1; y < ROWS; y++) {
+      ctx.beginPath();
+      ctx.moveTo(FX, FY + y * CELL + 0.5);
+      ctx.lineTo(FX + COLS * CELL, FY + y * CELL + 0.5);
+      ctx.stroke();
+    }
+  }
+
+  function drawFood() {
+    if (!food) return;
+    ctx.fillStyle = C_FOOD;
+    var cx = FX + food.x * CELL + CELL / 2;
+    var cy = FY + food.y * CELL + CELL / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, CELL * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawSnake() {
+    for (var i = snake.length - 1; i >= 0; i--) {
+      var s = snake[i];
+      var pad = i === 0 ? 1 : 2;
+      ctx.fillStyle = i === 0 ? C_HEAD : C_SNAKE;
+      roundRect(FX + s.x * CELL + pad, FY + s.y * CELL + pad,
+                CELL - pad * 2, CELL - pad * 2, i === 0 ? 5 : 4);
+    }
+  }
+
+  function overlay(lines) {
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.fillRect(0, HUD, W, H - HUD);
+    var y = H / 2 - (lines.length - 1) * 16;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      text(l.t, W / 2, y + i * 32, l.s || 18, l.c || C_TEXT, "center", l.w || "600");
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = C_BG;
+    ctx.fillRect(0, 0, W, H);
+    drawHud();
+    drawBoard();
+    drawFood();
+    drawSnake();
+
+    if (state === "start") {
+      overlay([
+        { t: "贪吃蛇", s: 26, w: "700" },
+        { t: "滑动转向 · 轻点暂停", s: 13, c: C_DIM, w: "400" },
+        { t: "按回车或滑动开始", s: 13, c: C_SNAKE, w: "500" }
+      ]);
+    } else if (state === "pause") {
+      overlay([
+        { t: "已暂停", s: 24, w: "700" },
+        { t: "轻点或按空格继续", s: 13, c: C_DIM, w: "400" }
+      ]);
+    } else if (state === "over") {
+      overlay([
+        { t: "游戏结束", s: 24, c: C_FOOD, w: "700" },
+        { t: "得分 " + score + " · 最高 " + best, s: 16, w: "600" },
+        { t: "再滑一次或按回车重开", s: 13, c: C_DIM, w: "400" }
+      ]);
+    }
+  }
+
+  // ---------- 输入 ----------
+
+  document.addEventListener("keydown", function (e) {
+    var k = e.key;
+    if (k === "ArrowUp" || k === "w" || k === "W") { turn(0, -1); e.preventDefault(); }
+    else if (k === "ArrowDown" || k === "s" || k === "S") { turn(0, 1); e.preventDefault(); }
+    else if (k === "ArrowLeft" || k === "a" || k === "A") { turn(-1, 0); e.preventDefault(); }
+    else if (k === "ArrowRight" || k === "d" || k === "D") { turn(1, 0); e.preventDefault(); }
+    else if (k === " ") {
+      e.preventDefault();
+      if (state === "start") start(); else togglePause();
+    } else if (k === "Enter") {
+      e.preventDefault();
+      if (state === "start" || state === "over") start();
+      else togglePause();
+    }
+  });
+
+  var tStart = null;
+  cv.addEventListener("touchstart", function (e) {
+    if (e.touches.length === 1) {
+      tStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  cv.addEventListener("touchend", function (e) {
+    if (!tStart) return;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    tStart = null;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+      // 轻点
+      if (state === "start" || state === "over") start();
+      else togglePause();
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+    else turn(0, dy > 0 ? 1 : -1);
+    e.preventDefault();
+  }, { passive: false });
+
+  // 桌面鼠标模拟滑动（便于调试）
+  var mStart = null;
+  cv.addEventListener("mousedown", function (e) { mStart = { x: e.clientX, y: e.clientY }; });
+  cv.addEventListener("mouseup", function (e) {
+    if (!mStart) return;
+    var dx = e.clientX - mStart.x, dy = e.clientY - mStart.y;
+    mStart = null;
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+      if (state === "start" || state === "over") start();
+      else togglePause();
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+    else turn(0, dy > 0 ? 1 : -1);
+  });
+
+  // 只读调试句柄（供自动化验证读取状态，不提供改写能力）
+  window.__game = {
+    snapshot: function () {
+      return {
+        state: state,
+        score: score,
+        best: best,
+        tickMs: tickMs,
+        dir: { x: dir.x, y: dir.y },
+        snake: snake.map(function (s) { return { x: s.x, y: s.y }; }),
+        food: food ? { x: food.x, y: food.y } : null
+      };
+    }
+  };
+
+  reset();
+  state = "start";
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -94,7 +94,8 @@ export default {
       key: BEST_KEY,
       success(data) {
         const v = parseInt(data, 10)
-        if (!isNaN(v)) self.best = v
+        // 回调可能晚于首次死亡：只允许抬高，防止延迟回调回退已保存的新最高分
+        if (!isNaN(v) && v > self.best) self.best = v
       },
       fail() {}
     })

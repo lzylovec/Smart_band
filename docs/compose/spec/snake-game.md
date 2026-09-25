@@ -1,14 +1,23 @@
 ---
 feature: snake-game
-status: in-progress
+status: delivered
 updated: 2026-09-25
 branch: feat/band11-snake-quickapp
-commits: # 实现进行中
+commits: 496b84c..5b9f8de
 ---
 
 # 小米手环 11 贪吃蛇（快应用）
 
 ## Report
+
+**What was built** — 单文件 Web 可玩原型 `prototype/index.html`：按手环 11 跑道屏逻辑分辨率 212×520 设计（HUD 40px + 13×30 网格），AMOLED 纯黑视觉，完整状态机（开始/游玩/暂停/结束）、键盘与触屏转向、计分与最高分 localStorage 持久化、随进食加速。转向保护实现为"反向输入仅对照当前方向拒绝"，从结构上保证单步内不可能 180° 掉头（含同 tick 双键序列）。另交付 macOS→rpk 真机打包链路调研结论（S2「真机打包链路」小节）。
+
+**Verification** — `python3 scripts/verify_prototype.py`（headless Chromium）：9 项 PASS，含无 JS/console 错误、节拍推进、转向与掉头保护、同 tick 双键无法绕过掉头保护、进食计分与加速、撞墙死亡+最高分持久化、重开/暂停恢复、刷新后最高分存活；`ALL CHECKS PASSED`。回归有效性：对修复前代码（stash 后）运行同脚本，在双键断言处 AssertionError、EXIT=1。独立评审子代理对 critical 修复 diff（496b84c..5b9f8de）复审：三项结论均无 critical。
+
+**Journey log** —
+1. 首版掉头保护比对 `queued||dir`，同 tick 先↑后← 可绕过导致单步掉头撞颈即死；评审发现后改为仅对照 `dir`，不变式"dir 仅在 step 中变更"保证任意按键序列无法产生单步 180°。
+2. 验证脚本最初只测单次反向，漏报上述漏洞；补充同 tick 双键断言后旧代码 FAIL、新代码 PASS，测试有效性经反向验证。
+3. 手环 11 无官方三方 SDK，调研确立 AstroBox/aiot-toolkit 侧载链路；plugin-dev（WASM 宿主插件）与本特性无关，早期方向为死胡同。
 
 ## [S1] Problem
 
@@ -152,7 +161,7 @@ curl -fsSL https://abox.run/install.sh | bash
 
 ## Tasks
 
-- [ ] T1: 撰写并确认特性文档 — acceptance: 本文档经用户确认，无未决产品问题（covers: S1, S2, S3）
-- [ ] T2: 实现 Web 可玩原型 `prototype/index.html` — acceptance: headless 浏览器验证通过：无 JS 错误、蛇随节拍移动、转向有效、撞墙进入游戏结束且最高分持久化（covers: S2; depends: T1）
+- [x] T1: 撰写并确认特性文档 — acceptance: 本文档经用户确认，无未决产品问题（covers: S1, S2, S3）
+- [x] T2: 实现 Web 可玩原型 `prototype/index.html` — acceptance: headless 浏览器验证通过：无 JS 错误、蛇随节拍移动、转向有效、撞墙进入游戏结束且最高分持久化（covers: S2; depends: T1）
 - [x] T3: 调研 macOS 打包链路并回填文档 — acceptance: S2「真机打包链路」小节包含可复现结论或明确阻塞点+替代方案，并记录手环 11 适配依据（covers: S2; depends: T1）
-- [ ] T4: 验证、独立评审并 Finalize — acceptance: 验证命令与结果记录于 Report，评审子代理三结论（规格符合性/正确性/一致性）均无 critical，文档 status: delivered 并提交（covers: 全部; depends: T2, T3）
+- [x] T4: 验证、独立评审并 Finalize — acceptance: 验证命令与结果记录于 Report，评审子代理三结论（规格符合性/正确性/一致性）均无 critical，文档 status: delivered 并提交（covers: 全部; depends: T2, T3）

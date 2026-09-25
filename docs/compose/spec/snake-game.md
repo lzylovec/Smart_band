@@ -1,9 +1,9 @@
 ---
 feature: snake-game
-status: delivered
+status: in-progress
 updated: 2026-09-25
 branch: feat/band11-snake-quickapp
-commits: 496b84c..5b9f8de
+commits: 496b84c..5b9f8de # 第一轮交付；第二轮（rpk 打包）进行中
 ---
 
 # 小米手环 11 贪吃蛇（快应用）
@@ -31,10 +31,11 @@ commits: 496b84c..5b9f8de
 - 应用形态：Vela 快应用（.ux + JS，打包为 rpk），非 AstroBox 宿主插件（plugin-dev 文档是宿主端 WASM 插件，与本特性无关）。
 - 安装方式：AstroBox 本地侧载（免官方审核）。真机侧载不属于本次交付范围，见 S3。
 
-### 本体形态：两级交付
+### 本体形态：交付物
 
-1. **Web 可玩原型**（本次交付主体）：单文件 `prototype/index.html`，自包含（内联 CSS/JS，无外部依赖），在浏览器中完整可玩。画布逻辑分辨率固定 **212×520**，居中显示并按视口等比缩放；AMOLED 纯黑背景。
-2. **真机打包链路**（本次交付调研结论）：在 S2 增补「真机打包链路」小节，记录 macOS 上从原型到 rpk 的可复现工具链结论。
+1. **Web 可玩原型**（第一轮已交付）：单文件 `prototype/index.html`，自包含（内联 CSS/JS，无外部依赖），在浏览器中完整可玩。画布逻辑分辨率固定 **212×520**，居中显示并按视口等比缩放；AMOLED 纯黑背景。
+2. **真机打包链路**（第一轮已交付）：S2「真机打包链路」小节记录 macOS 上从原型到 rpk 的可复现工具链结论。
+3. **签名 rpk 包**（第二轮新增）：`quickapp/` 下的 Vela 快应用项目，移植原型玩法，自签证书打包出可侧载的 `.rpk`。
 
 ### 游戏规则契约
 
@@ -61,6 +62,17 @@ commits: 496b84c..5b9f8de
 
 - 自动化验证：headless 浏览器加载 `prototype/index.html`，断言——页面无 JS 错误；键盘开始游戏后蛇位置随节拍前进；触发转向后方向改变；模拟撞墙后进入游戏结束状态且最高分写入 localStorage。
 - 打包链路调研的验收以「真机打包链路」小节结论为准（可行给可复现步骤；不可行给明确阻塞点与替代方案），不在本次执行真机安装。
+- rpk 构建验收见「快应用交付契约」（第二轮）。
+
+### 快应用交付契约（第二轮）
+
+- 项目位置：`quickapp/`，Vela 快应用标准结构（`manifest.json` + 页面 `.ux`），单页游戏。
+- 设计基准：`designWidth: 212`，页面铺满 212×520；布局遵守胶囊屏安全区（内容避开上下端圆弧、左右留 ≥8px）。
+- 玩法：完整沿用「游戏规则契约」（13×30、200ms 起步 -4ms/食物下限 80ms、撞墙撞自身即死、+10 分、状态机、掉头保护对照当前方向）。
+- 操作：仅触屏——滑动转向，轻点暂停/继续，游戏结束后滑动或轻点重开（无键盘）。
+- 最高分持久化：使用 Vela 快应用本地存储 API；若实测该环境不可用，降级为进程内存保留最高分，并在 Report 记录降级原因。
+- 打包：`sign/` 下自签证书（openssl），`aiot release` 产出签名 rpk 至 `quickapp/dist/`；`aiot build` 产出 debug rpk 一并保留。**`sign/` 私钥与证书不入库**（.gitignore 排除）。
+- 验收：`aiot release` 无错误退出；产物 rpk 为合法 zip，内含应用元数据（app.json 等）与页面文件。
 
 ### 真机打包链路
 
@@ -165,3 +177,5 @@ curl -fsSL https://abox.run/install.sh | bash
 - [x] T2: 实现 Web 可玩原型 `prototype/index.html` — acceptance: headless 浏览器验证通过：无 JS 错误、蛇随节拍移动、转向有效、撞墙进入游戏结束且最高分持久化（covers: S2; depends: T1）
 - [x] T3: 调研 macOS 打包链路并回填文档 — acceptance: S2「真机打包链路」小节包含可复现结论或明确阻塞点+替代方案，并记录手环 11 适配依据（covers: S2; depends: T1）
 - [x] T4: 验证、独立评审并 Finalize — acceptance: 验证命令与结果记录于 Report，评审子代理三结论（规格符合性/正确性/一致性）均无 critical，文档 status: delivered 并提交（covers: 全部; depends: T2, T3）
+- [ ] T5: 移植原型到 `quickapp/` 并打出签名 rpk — acceptance: `aiot release` 无错误退出产出 rpk，zip 结构检查含应用元数据与页面文件；`sign/` 私钥不入库（covers: 快应用交付契约; depends: T4）
+- [ ] T6: 第二轮验证、评审并 Finalize — acceptance: 构建验证命令与结果记入 Report，评审子代理三结论均无 critical，status: delivered 并提交（covers: 快应用交付契约; depends: T5）
